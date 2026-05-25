@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.ocean.tr4s"
+    namespace = "com.nullx.ppl"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.ocean.tr4s"
+        applicationId = "com.nullx.ppl"
         minSdk = 23                         // ✅ ganti di sini
         targetSdk = 35
         versionCode = flutter.versionCode
