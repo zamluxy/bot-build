@@ -35,9 +35,34 @@ jobs:
           echo "type=$BUILD_TYPE" >> $GITHUB_OUTPUT
           echo "Build type: $BUILD_TYPE"
 
+      - name: Fix compileSdk & dependencies
+        working-directory: ./project
+        run: |
+          # Fix compileSdk ke 36 di build.gradle.kts
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i 's/compileSdk = [0-9]*/compileSdk = 36/' android/app/build.gradle.kts
+            sed -i 's/targetSdk = [0-9]*/targetSdk = 36/' android/app/build.gradle.kts
+            echo "Fixed compileSdk in build.gradle.kts"
+          fi
+          # Fix compileSdk di build.gradle (groovy)
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 36/' android/app/build.gradle
+            sed -i 's/compileSdk [0-9]*/compileSdk 36/' android/app/build.gradle
+            sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 36/' android/app/build.gradle
+            sed -i 's/targetSdk [0-9]*/targetSdk 36/' android/app/build.gradle
+            echo "Fixed compileSdk in build.gradle"
+          fi
+          # Fix font_awesome_flutter ke versi kompatibel
+          if grep -q "font_awesome_flutter" pubspec.yaml; then
+            sed -i 's/font_awesome_flutter:.*/font_awesome_flutter: ^10.7.0/' pubspec.yaml
+            echo "Pinned font_awesome_flutter to ^10.7.0"
+          fi
+          echo "--- pubspec.yaml dependencies ---"
+          grep -A5 "font_awesome" pubspec.yaml || true
+
       - name: Flutter pub get
         working-directory: ./project
-        run: flutter pub get
+        run: flutter pub upgrade --major-versions || flutter pub get
 
       - name: Build APK Debug
         if: steps.build_type.outputs.type == 'debug'
