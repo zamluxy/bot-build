@@ -1,13 +1,15 @@
-import 'dart:ui';
+// ==================== LOGIN_PAGE.DART (NAXRAT V3) ====================
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'splash.dart';
+import 'package:video_player/video_player.dart';
+import 'dart:ui';
 
-const String baseUrl = "http://laiqqqgantenggbanget.miunnst.site:2006";
+const String baseUrl = "http://hostinger.gunturxhoshino.biz.id:3000";
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,41 +18,86 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage>
-    with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final userController = TextEditingController();
   final passController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-
   bool isLoading = false;
-  bool _obscurePassword = true;
   String? androidId;
+  bool _isObscure = true;
+  bool _isMuted = false;
 
-  late AnimationController _controller;
-  late Animation<double> _fadeAnim;
+  late VideoPlayerController _videoController;
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late AnimationController _pulseController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _pulseAnimation;
 
-  // Palet warna yang senada dengan dashboard
-  final Color bloodRed = const Color(0xFFE53935);
+  // Warna NAXRAT RED THEME
+  final Color primaryRed = const Color(0xFFE53935);
   final Color darkRed = const Color(0xFFB71C1C);
-  final Color lightRed = const Color(0xFFFF5252);
-  final Color deepBlack = const Color(0xFF0A0A0A);
-  final Color glassBlack = Colors.black.withOpacity(0.7);
-  final Color cardDark = const Color(0xFF1A1A1A);
+  final Color redGlow = const Color(0xFFE57373);
+  final Color darkBg = const Color(0xFF0A0A0A);
+  final Color textWhite = const Color(0xFFFFFFFF);
+  final Color textGray = const Color(0xFF9E9E9E);
 
   @override
   void initState() {
     super.initState();
-    _initAnim();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     initLogin();
+
+    // Animations
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.03).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _fadeController.forward();
+    _slideController.forward();
+
+    // Video Background
+    _videoController = VideoPlayerController.asset('assets/videos/login.mp4')
+      ..initialize().then((_) {
+        setState(() {});
+        _videoController.setLooping(true);
+        _videoController.play();
+        _videoController.setVolume(1.0); // SOUND ON
+      });
   }
 
-  void _initAnim() {
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
-
-    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+  @override
+  void dispose() {
+    userController.dispose();
+    passController.dispose();
+    _videoController.dispose();
+    _fadeController.dispose();
+    _slideController.dispose();
+    _pulseController.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
   }
 
   Future<void> initLogin() async {
@@ -63,33 +110,28 @@ class _LoginPageState extends State<LoginPage>
 
     if (savedUser != null && savedPass != null && savedKey != null) {
       final uri = Uri.parse(
-          "$baseUrl/myInfo?username=$savedUser&password=$savedPass&androidId=$androidId&key=$savedKey");
-
+        "$baseUrl/api/auth/myInfo?username=$savedUser&password=$savedPass&androidId=$androidId&key=$savedKey",
+      );
       try {
         final res = await http.get(uri);
         final data = jsonDecode(res.body);
 
         if (data['valid'] == true) {
-          Navigator.pushReplacement(
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(
             context,
-            MaterialPageRoute(
-              builder: (_) => SplashScreen(
-                username: savedUser,
-                password: savedPass,
-                role: data['role'],
-                sessionKey: data['key'],
-                expiredDate: data['expiredDate'],
-                listBug: (data['listBug'] as List? ?? [])
-                    .map((e) => Map<String, dynamic>.from(e as Map))
-                    .toList(),
-                listDoos: (data['listDDoS'] as List? ?? [])
-                    .map((e) => Map<String, dynamic>.from(e as Map))
-                    .toList(),
-                news: (data['news'] as List? ?? [])
-                    .map((e) => Map<String, dynamic>.from(e as Map))
-                    .toList(),
-              ),
-            ),
+            '/splash',
+            arguments: {
+              'username': savedUser,
+              'password': savedPass,
+              'role': data['role'],
+              'key': data['key'],
+              'expiredDate': data['expiredDate'],
+              'listBug': data['listBug'] ?? [],
+              'listPayload': data['listPayload'] ?? [],
+              'listDDoS': data['listDDoS'] ?? [],
+              'news': data['news'] ?? [],
+            },
           );
         }
       } catch (_) {}
@@ -103,16 +145,19 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> login() async {
-    if (!_formKey.currentState!.validate()) return;
-
     final username = userController.text.trim();
     final password = passController.text.trim();
+
+    if (username.isEmpty || password.isEmpty) {
+      _showAlert("Error", "Username and password are required.");
+      return;
+    }
 
     setState(() => isLoading = true);
 
     try {
       final validate = await http.post(
-        Uri.parse("$baseUrl/validate"),
+        Uri.parse("$baseUrl/api/auth/validate"),
         body: {
           "username": username,
           "password": password,
@@ -121,259 +166,429 @@ class _LoginPageState extends State<LoginPage>
       );
 
       final validData = jsonDecode(validate.body);
-      print("VALIDATE RESPONSE => $validData");
 
       if (validData['expired'] == true) {
-        _showPopup(
-          title: "⏳ Access Expired",
-          message: "Your access has expired.\nPlease renew it.",
-          color: Colors.orange,
-          showContact: true,
-        );
+        _showAlert("Access Expired", "Your access has expired.\nPlease renew it.", showContact: true);
       } else if (validData['valid'] != true) {
-        _showPopup(
-          title: "❌ Login Failed",
-          message: "Invalid username or password.",
-          color: Colors.red,
-        );
+        _showAlert("Login Failed", "Invalid username or password.", showContact: true);
       } else {
         final prefs = await SharedPreferences.getInstance();
-        prefs.setString("username", username);
-        prefs.setString("password", password);
-        prefs.setString("key", validData['key']);
+        await prefs.setString("username", username);
+        await prefs.setString("password", password);
+        await prefs.setString("key", validData['key']);
 
-        Navigator.pushReplacement(
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(
           context,
-          MaterialPageRoute(
-            builder: (_) => SplashScreen(
-              username: username,
-              password: password,
-              role: validData['role'],
-              sessionKey: validData['key'],
-              expiredDate: validData['expiredDate'],
-              listBug: (validData['listBug'] as List? ?? [])
-                  .map((e) => Map<String, dynamic>.from(e as Map))
-                  .toList(),
-              listDoos: (validData['listDDoS'] as List? ?? [])
-                  .map((e) => Map<String, dynamic>.from(e as Map))
-                  .toList(),
-              news: (validData['news'] as List? ?? [])
-                  .map((e) => Map<String, dynamic>.from(e as Map))
-                  .toList(),
-            ),
-          ),
+          '/splash',
+          arguments: {
+            'username': username,
+            'password': password,
+            'role': validData['role'],
+            'key': validData['key'],
+            'expiredDate': validData['expiredDate'],
+            'listBug': validData['listBug'] ?? [],
+            'listPayload': validData['listPayload'] ?? [],
+            'listDDoS': validData['listDDoS'] ?? [],
+            'news': validData['news'] ?? [],
+          },
         );
       }
-    } catch (e) {
-      _showPopup(
-        title: "⚠️ Connection Error",
-        message:
-        "Failed to connect to the server.\nPlease check your internet connection.",
-        color: bloodRed, // Gunakan warna merah
-      );
+    } catch (_) {
+      _showAlert("Connection Error", "Failed to connect to the server.");
     }
 
     setState(() => isLoading = false);
   }
 
-  void _showPopup({
-    required String title,
-    required String message,
-    Color color = Colors.red,
-    bool showContact = false,
-  }) {
+  void _showAlert(String title, String msg, {bool showContact = false}) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: glassBlack, // Gunakan glassBlack
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          title,
-          style:
-          TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actions: [
-          if (showContact)
-            TextButton(
-              onPressed: () async {
-                final uri = Uri.parse("https://t.me/Farelshere");
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              },
-              child: Text("Contact Admin",
-                  style: TextStyle(color: lightRed)), // Gunakan lightRed
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-            const Text("Close", style: TextStyle(color: Colors.white54)),
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: primaryRed.withOpacity(0.5), width: 1),
           ),
-        ],
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [darkRed, primaryRed]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  title.contains("Error") || title.contains("Failed")
+                      ? Icons.error_outline
+                      : title.contains("Expired")
+                          ? Icons.timer_off
+                          : Icons.info_outline,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(msg, style: TextStyle(color: textGray, fontSize: 14)),
+          actions: [
+            if (showContact)
+              TextButton.icon(
+                onPressed: () async {
+                  final uri = Uri.parse("tg://resolve?domain=chgunturx");
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    await launchUrl(Uri.parse("https://t.me/ALLINFORMATIONVORTAXS"), mode: LaunchMode.externalApplication);
+                  }
+                },
+                icon: Icon(Icons.message, size: 18, color: primaryRed),
+                label: Text("Contact Admin", style: TextStyle(color: textWhite)),
+                style: TextButton.styleFrom(backgroundColor: primaryRed.withOpacity(0.2)),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("CLOSE", style: TextStyle(color: primaryRed, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    userController.dispose();
-    passController.dispose();
-    super.dispose();
+  Future<void> _openTelegramBot() async {
+    final uri = Uri.parse("tg://resolve?domain=rizqynst2010");
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      await launchUrl(Uri.parse("https://t.me/rizqynst2010"), mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final inputWidth = MediaQuery.of(context).size.width * 0.85;
-    // Gradien yang disesuaikan dengan tema merah
-    final gradientRed = LinearGradient(
-      colors: [darkRed, bloodRed],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-
     return Scaffold(
-      backgroundColor: deepBlack,
+      backgroundColor: darkBg,
       body: Stack(
         children: [
-          // 🔹 Gradient latar
+          // Video Background Full Screen
+          _videoController.value.isInitialized
+              ? SizedBox.expand(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _videoController.value.size.width,
+                      height: _videoController.value.size.height,
+                      child: VideoPlayer(_videoController),
+                    ),
+                  ),
+                )
+              : Container(color: darkBg),
+
+          // Dark Overlay Gradient
           Container(
             decoration: BoxDecoration(
-              gradient: gradientRed.withOpacity(0.2),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  darkBg.withOpacity(0.7),
+                  darkBg.withOpacity(0.4),
+                  darkBg.withOpacity(0.8),
+                  darkBg.withOpacity(0.95),
+                ],
+              ),
             ),
           ),
-          // 🔹 Efek kaca blur
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(color: Colors.black.withOpacity(0.4)),
+
+          // Red Glow Overlay
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.3),
+                radius: 1.2,
+                colors: [
+                  primaryRed.withOpacity(0.2),
+                  Colors.transparent,
+                  darkBg.withOpacity(0.5),
+                ],
+              ),
+            ),
           ),
 
-          // 🔹 Konten utama
+          // Sound Control Button
+          Positioned(
+            top: 50,
+            right: 20,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: primaryRed.withOpacity(0.5), width: 1),
+              ),
+              child: IconButton(
+                onPressed: () {
+                  setState(() {
+                    if (_videoController.value.volume > 0) {
+                      _videoController.setVolume(0);
+                      _isMuted = true;
+                    } else {
+                      _videoController.setVolume(1.0);
+                      _isMuted = false;
+                    }
+                  });
+                },
+                icon: Icon(
+                  _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  color: primaryRed,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+
+          // Main Content
           SafeArea(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo glass
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          gradient: gradientRed, // Gunakan gradien merah
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: bloodRed.withOpacity(0.5), // Bayangan merah
-                              blurRadius: 20,
-                              spreadRadius: 2,
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Logo dengan Pulse Animation
+                        ScaleTransition(
+                          scale: _pulseAnimation,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: primaryRed.withOpacity(0.8), width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryRed.withOpacity(0.5),
+                                  blurRadius: 30,
+                                  spreadRadius: 5,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(30),
-                          child: Image.asset(
-                            'assets/images/logo.jpg',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 25),
-
-                      Text(
-                        "Evil eye X,",
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: lightRed.withOpacity(0.8), // Teks merah muda
-                          shadows: [
-                            Shadow(
-                              offset: const Offset(0, 2),
-                              blurRadius: 8,
-                              color: bloodRed.withOpacity(0.6), // Bayangan teks merah
-                            )
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 6),
-                      const Text("Sign in to continue",
-                          style:
-                          TextStyle(color: Colors.white60, fontSize: 14)),
-
-                      const SizedBox(height: 40),
-
-                      // 🔹 Form glass
-                      Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: glassBlack,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: bloodRed.withOpacity(0.3), // Border merah
-                              width: 1.2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: bloodRed.withOpacity(0.2), // Bayangan merah
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            children: [
-                              _glassTextField(
-                                  controller: userController,
-                                  label: "Username",
-                                  icon: Icons.person_outline),
-                              const SizedBox(height: 16),
-                              _glassTextField(
-                                  controller: passController,
-                                  label: "Password",
-                                  icon: Icons.lock_outline,
-                                  obscureText: _obscurePassword,
-                                  isPassword: true),
-                              const SizedBox(height: 24),
-
-                              // 🔹 Tombol login
-                              SizedBox(
-                                width: double.infinity,
-                                height: 48,
-                                child: ElevatedButton(
-                                  onPressed: isLoading ? null : login,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: bloodRed, // Tombol merah
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: isLoading
-                                      ? const CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor:
-                                    AlwaysStoppedAnimation<Color>(
-                                        Colors.white),
-                                  )
-                                      : const Text("Sign In",
-                                      style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white)),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                height: 100,
+                                width: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 100,
+                                  width: 100,
+                                  color: primaryRed,
+                                  child: const Icon(Icons.android, color: Colors.white, size: 50),
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 24),
+
+                        // Title
+                        ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [primaryRed, redGlow, primaryRed],
+                          ).createShader(bounds),
+                          child: const Text(
+                            "VORTAXS",
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 5,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: primaryRed.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: primaryRed.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            "VORTAXS X TEAM",
+                            style: TextStyle(
+                              color: textGray,
+                              fontSize: 11,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 36),
+
+                        // Login Form - Glassmorphism Card
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                            child: Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.black.withOpacity(0.7),
+                                    Colors.black.withOpacity(0.4),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: primaryRed.withOpacity(0.4),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryRed.withOpacity(0.2),
+                                    blurRadius: 30,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                children: [
+                                  // Username Field
+                                  _buildInput(
+                                    controller: userController,
+                                    hint: "Username",
+                                    icon: Icons.person_outline,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // Password Field
+                                  _buildInput(
+                                    controller: passController,
+                                    hint: "Password",
+                                    icon: Icons.lock_outline,
+                                    isPassword: true,
+                                  ),
+                                  const SizedBox(height: 28),
+                                  // Sign In Button
+                                  Container(
+                                    width: double.infinity,
+                                    height: 55,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      gradient: LinearGradient(
+                                        colors: [darkRed, primaryRed, redGlow],
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: primaryRed.withOpacity(0.5),
+                                          blurRadius: 20,
+                                          spreadRadius: 2,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed: isLoading ? null : login,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                      child: isLoading
+                                          ? const SizedBox(
+                                              width: 24,
+                                              height: 24,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2.5,
+                                              ),
+                                            )
+                                          : const Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.login_rounded, color: Colors.white, size: 20),
+                                                SizedBox(width: 10),
+                                                Text(
+                                                  "SIGN IN",
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    color: Colors.white,
+                                                    letterSpacing: 2,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Buy Account Button
+                        Container(
+                          width: double.infinity,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(25),
+                            border: Border.all(color: primaryRed.withOpacity(0.5), width: 1.5),
+                          ),
+                          child: OutlinedButton.icon(
+                            onPressed: _openTelegramBot,
+                            icon: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(colors: [darkRed, primaryRed]),
+                              ),
+                              child: const Icon(Icons.shopping_cart_rounded, color: Colors.white, size: 14),
+                            ),
+                            label: Text(
+                              "BUY PREMIUM ACCESS",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: primaryRed,
+                                letterSpacing: 1.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Footer
+                        Text(
+                          "VORTAXS | @rizqynst2010",
+                          style: TextStyle(
+                            color: textGray.withOpacity(0.4),
+                            fontSize: 10,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -384,51 +599,55 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  // 🔹 Custom TextField bergaya kaca
-  Widget _glassTextField({
+  Widget _buildInput({
     required TextEditingController controller,
-    required String label,
+    required String hint,
     required IconData icon,
-    bool obscureText = false,
     bool isPassword = false,
   }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
-        prefixIcon: Icon(icon, color: lightRed), // Ikon merah
-        suffixIcon: isPassword
-            ? IconButton(
-          icon: Icon(
-            _obscurePassword
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
-            color: Colors.white60,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: primaryRed.withOpacity(0.3), width: 1),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword ? _isObscure : false,
+        style: const TextStyle(color: Colors.white, fontSize: 15),
+        cursorColor: primaryRed,
+        decoration: InputDecoration(
+          prefixIcon: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: primaryRed.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: primaryRed, size: 20),
           ),
-          onPressed: () {
-            setState(() {
-              _obscurePassword = !_obscurePassword;
-            });
-          },
-        )
-            : null,
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-          BorderSide(color: bloodRed.withOpacity(0.3), width: 1), // Border merah
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: lightRed, width: 2), // Border fokus merah
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    _isObscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    color: primaryRed.withOpacity(0.6),
+                    size: 20,
+                  ),
+                  onPressed: () => setState(() => _isObscure = !_isObscure),
+                )
+              : null,
+          hintText: hint,
+          hintStyle: TextStyle(color: textGray.withOpacity(0.5), fontSize: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: primaryRed, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         ),
       ),
-      validator: (value) =>
-      value == null || value.isEmpty ? "Please enter $label" : null,
     );
   }
 }
