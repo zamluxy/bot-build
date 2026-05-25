@@ -1,0 +1,61 @@
+name: Build Flutter APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+          channel: 'stable'
+          cache: true
+
+      - name: Read build type
+        id: build_type
+        run: |
+          if [ -f "build_type.txt" ]; then
+            BUILD_TYPE=$(cat build_type.txt | tr -d '[:space:]')
+          else
+            BUILD_TYPE="debug"
+          fi
+          echo "type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "Build type: $BUILD_TYPE"
+
+      - name: Flutter pub get
+        working-directory: ./project
+        run: flutter pub get
+
+      - name: Build APK Debug
+        if: steps.build_type.outputs.type == 'debug'
+        working-directory: ./project
+        run: flutter build apk --debug
+
+      - name: Build APK Release
+        if: steps.build_type.outputs.type == 'release'
+        working-directory: ./project
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-output
+          path: |
+            project/build/app/outputs/flutter-apk/*.apk
+            project/build/app/outputs/apk/**/*.apk
+          retention-days: 1
+          if-no-files-found: error
