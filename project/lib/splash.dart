@@ -1,221 +1,270 @@
-import 'dart:ui';
+// splash.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+
 import 'dashboard_page.dart';
 
-class SplashScreen extends StatefulWidget {
-  final String username;
-  final String password;
-  final String role;
-  final String expiredDate;
-  final String sessionKey;
-  final List<Map<String, dynamic>> listBug;
-  final List<Map<String, dynamic>> listDoos;
-  final List<dynamic> news;
-
-  const SplashScreen({
-    super.key,
-    required this.username,
-    required this.password,
-    required this.role,
-    required this.expiredDate,
-    required this.sessionKey,
-    required this.listBug,
-    required this.listDoos,
-    required this.news,
-  });
+class SplashPage extends StatefulWidget {
+  final Map<String, dynamic> data;
+  const SplashPage({super.key, required this.data});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late VideoPlayerController _videoController;
-  late AnimationController _fadeController;
-  bool _fadeOutStarted = false;
+class _SplashPageState extends State<SplashPage> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+  bool _isNavigated = false;
+  
+  // Deteksi aspect ratio video
+  double _videoAspectRatio = 16 / 9;
+  bool _isPortrait = false; // true = 9:16, false = 16:9
 
-  // PERUBAHAN: Tambahkan palet warna yang senada
-  final Color bloodRed = const Color(0xFFE53935);
+  final Color primaryRed = const Color(0xFFE53935);
   final Color darkRed = const Color(0xFFB71C1C);
-  final Color lightRed = const Color(0xFFFF5252);
-  final Color deepBlack = const Color(0xFF0A0A0A);
-  final Color glassBlack = Colors.black.withOpacity(0.7);
 
   @override
   void initState() {
     super.initState();
-    _videoController = VideoPlayerController.asset("assets/videos/landing.mp4")
+    _initializeVideo();
+  }
+
+  void _initializeVideo() {
+    _controller = VideoPlayerController.asset('assets/videos/load.mp4')
       ..initialize().then((_) {
-        setState(() {});
-        _videoController.setLooping(false);
-        _videoController.play();
-
-        _fadeController = AnimationController(
-          vsync: this,
-          duration: const Duration(seconds: 1),
-        );
-
-        _videoController.addListener(() {
-          final position = _videoController.value.position;
-          final duration = _videoController.value.duration;
-
-          if (duration != null &&
-              position >= duration - const Duration(seconds: 1) &&
-              !_fadeOutStarted) {
-            _fadeOutStarted = true;
-            _fadeController.forward();
-          }
-
-          if (position >= duration) {
-            _navigateToDashboard();
-          }
-        });
+        // Deteksi aspect ratio video asli
+        final width = _controller.value.size.width;
+        final height = _controller.value.size.height;
+        _videoAspectRatio = width / height;
+        _isPortrait = height > width; // 9:16 = portrait
+        
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+        setState(() => _isInitialized = true);
+        _controller.play();
+        _controller.setVolume(1.0);
+      }).catchError((e) {
+        setState(() => _isInitialized = true);
       });
+
+    _controller.addListener(() {
+      if (_controller.value.isInitialized &&
+          _controller.value.position >= _controller.value.duration &&
+          !_isNavigated) {
+        _navigateToDashboard();
+      }
+    });
   }
 
   void _navigateToDashboard() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => DashboardPage(
-          username: widget.username,
-          password: widget.password,
-          role: widget.role,
-          expiredDate: widget.expiredDate,
-          sessionKey: widget.sessionKey,
-          listBug: widget.listBug,
-          listDoos: widget.listDoos,
-          news: widget.news,
+    if (_isNavigated) return;
+    _isNavigated = true;
+
+    _controller.pause();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => DashboardPage(
+            username: widget.data['username'] ?? '',
+            password: widget.data['password'] ?? '',
+            role: widget.data['role'] ?? 'user',
+            sessionKey: widget.data['key'] ?? '',
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
   void dispose() {
-    _videoController.dispose();
-    _fadeController.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+
+  // Hitung ukuran video berdasarkan aspect ratio dan orientasi layar
+  double _getVideoWidth(Size screenSize) {
+    if (_isPortrait) {
+      // Video 9:16 - lebar 70% dari lebar layar
+      return screenSize.width * 0.7;
+    } else {
+      // Video 16:9 - lebar 90% dari lebar layar
+      return screenSize.width * 0.9;
+    }
+  }
+
+  double _getVideoHeight(Size screenSize, double videoWidth) {
+    return videoWidth / _videoAspectRatio;
+  }
+
+  Widget _buildVideoBox() {
+    if (!_isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFE53935)),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenSize = MediaQuery.of(context).size;
+        final videoWidth = _getVideoWidth(screenSize);
+        final videoHeight = _getVideoHeight(screenSize, videoWidth);
+        
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              width: videoWidth,
+              height: videoHeight,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: primaryRed.withOpacity(0.6),
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryRed.withOpacity(0.5),
+                    blurRadius: 30,
+                    spreadRadius: 5,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: VideoPlayer(_controller),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: deepBlack, // PERUBAHAN: Gunakan deepBlack
+      backgroundColor: Colors.black,
       body: Stack(
-        alignment: Alignment.center,
+        fit: StackFit.expand,
         children: [
-          // === BACKGROUND AMBIENT DARI VIDEO UTAMA ===
-          if (_videoController.value.isInitialized)
-            Positioned.fill(
-              child: ColorFiltered(
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.5),
-                  BlendMode.darken,
-                ),
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoController.value.size.width,
-                    height: _videoController.value.size.height,
-                    child: VideoPlayer(_videoController),
-                  ),
-                ),
-              ),
-            ),
-          // PERUBAHAN: Overlay gradien merah elegan
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    bloodRed.withOpacity(0.15), // Ganti dengan merah
-                    deepBlack.withOpacity(0.8), // Ganti dengan hitam pekat
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+          Container(color: Colors.black),
+          _buildVideoBox(),
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -0.3),
+                radius: 1.2,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withOpacity(0.7),
+                  Colors.black.withOpacity(0.9),
+                ],
               ),
             ),
           ),
-
-          // === CARD UTAMA DENGAN VIDEO ===
-          if (_videoController.value.isInitialized)
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(30),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    width: MediaQuery.of(context).size.width * 0.8,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(30),
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.white.withOpacity(0.08),
-                          bloodRed.withOpacity(0.12), // Ganti dengan merah
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      border: Border.all(
-                        color: bloodRed.withOpacity(0.3), // Ganti dengan merah
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: bloodRed.withOpacity(0.25), // Ganti dengan merah
-                          blurRadius: 20,
-                          spreadRadius: 3,
-                        ),
-                      ],
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: _videoController.value.aspectRatio,
-                      child: VideoPlayer(_videoController),
-                    ),
-                  ),
-                ),
-              ),
-            )
-          else
-            const Center(child: CircularProgressIndicator(color: Colors.red)), // PERUBAHAN: Beri warna merah
-
-          // === LOGO / TEKS ===
           Positioned(
-            bottom: 80,
-            child: ShaderMask(
-              // PERUBAHAN: Gunakan gradien merah
-              shaderCallback: (bounds) => LinearGradient(
-                colors: [lightRed, bloodRed], // Ganti dengan merah
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ).createShader(bounds),
-              child: const Text(
-                "Evil eye X,",
-                style: TextStyle(
-                  fontSize: 44,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 3,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black54,
-                      blurRadius: 15,
-                      offset: Offset(2, 2),
+            bottom: 100,
+            left: 0,
+            right: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFFE53935), Color(0xFFB71C1C)],
+                  ).createShader(bounds),
+                  child: const Text(
+                    "VORTAXS",
+                    style: TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: 4.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "VORTAXS X TEAM",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.7),
+                    letterSpacing: 2.0,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  width: 50,
+                  height: 2,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFE53935), Color(0xFFB71C1C)],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 50,
+            right: 25,
+            child: GestureDetector(
+              onTap: _navigateToDashboard,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: const Color(0xFFE53935).withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text(
+                      "SKIP",
+                      style: TextStyle(
+                        color: Color(0xFFE53935),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    SizedBox(width: 5),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFFE53935),
+                      size: 12,
                     ),
                   ],
                 ),
               ),
             ),
           ),
-
-          // === FADE OUT ===
-          if (_fadeOutStarted)
-            FadeTransition(
-              opacity: _fadeController.drive(Tween(begin: 1.0, end: 0.0)),
-              child: Container(color: Colors.black),
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Text(
+              "© 2026 VORTAXS X TEAM | @ALLINFORMATIONVORTAXS",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withOpacity(0.3),
+              ),
             ),
+          ),
         ],
       ),
     );
