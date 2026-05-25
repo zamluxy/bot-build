@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'landing_page.dart';
 import 'login_page.dart';
 import 'dashboard_page.dart';
-import 'home_page.dart';
-import 'seller_page.dart';
-import 'admin_page.dart';
-import 'landing.dart';
+import 'splash.dart';
+import 'device_dashboard.dart';
+import 'control_panel.dart';  // ← PASTIKAN NAMA FILE INI
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -17,70 +20,55 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Evil eye X,',
+      title: 'VORTAXS',
       theme: ThemeData(
         brightness: Brightness.dark,
-        fontFamily: 'ShareTechMono',
         scaffoldBackgroundColor: Colors.black,
-        colorScheme: ColorScheme.dark().copyWith(
-          secondary: Colors.purple,
+        colorScheme: const ColorScheme.dark().copyWith(
+          primary: Color(0xFFE53935),
+          secondary: Color(0xFFB71C1C),
         ),
       ),
       initialRoute: '/',
       onGenerateRoute: (settings) {
+        final args = settings.arguments as Map<String, dynamic>?;
         switch (settings.name) {
           case '/':
-            return MaterialPageRoute(builder: (_) => LandingPage());
+            return MaterialPageRoute(builder: (_) => const LandingPage());
           case '/login':
             return MaterialPageRoute(builder: (_) => const LoginPage());
+          case '/splash':
+            return MaterialPageRoute(builder: (_) => SplashPage(data: args ?? {}));
           case '/dashboard':
-            final args = settings.arguments as Map<String, dynamic>;
             return MaterialPageRoute(
               builder: (_) => DashboardPage(
-                username: args['username'],
-                password: args['password'],
-                role: args['role'],
-                sessionKey: args['key'],
-                expiredDate: args['expiredDate'],
-                listBug: List<Map<String, dynamic>>.from(args['listBug'] ?? []), // ✅ aman
-                listDoos: List<Map<String, dynamic>>.from(args['listDoos'] ?? []), // ✅ aman
-                news: List<Map<String, dynamic>>.from(args['news'] ?? []), // ✅ aman
+                username: args?['username'] ?? '',
+                password: args?['password'] ?? '',
+                role: args?['role'] ?? 'user',
+                sessionKey: args?['key'] ?? '',
               ),
             );
-
-          case '/home':
-            final args = settings.arguments as Map<String, dynamic>;
+          case '/dashboard_rat':
+            return MaterialPageRoute(builder: (_) => const DeviceDashboardPage());
+          case '/control_panel':
+            if (args == null || args['id'] == null) {
+              return MaterialPageRoute(
+                builder: (_) => const Scaffold(
+                  body: Center(
+                    child: Text("ERROR: Device data not found", style: TextStyle(color: Color(0xFFE53935))),
+                  ),
+                ),
+              );
+            }
             return MaterialPageRoute(
-              builder: (_) => HomePage(
-                username: args['username'],
-                password: args['password'],
-                listBug: List<Map<String, dynamic>>.from(args['listBug'] ?? []), // ✅ aman
-                role: args['role'],
-                expiredDate: args['expiredDate'],
-                sessionKey: args['sessionKey'],
-              ),
+              builder: (_) => ControlPanelPage(device: args),
             );
-
-          case '/seller':
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder: (_) => SellerPage(
-                keyToken: args['keyToken'],
-              ),
-            );
-
-          case '/admin':
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder: (_) => AdminPage(
-                sessionKey: args['sessionKey'],
-              ),
-            );
-
           default:
             return MaterialPageRoute(
               builder: (_) => const Scaffold(
-                body: Center(child: Text("404 - Not Found")),
+                body: Center(
+                  child: Text("404 - PAGE NOT FOUND", style: TextStyle(color: Color(0xFFE53935))),
+                ),
               ),
             );
         }
